@@ -50,11 +50,10 @@
             </ul>
           </details>
           <RecordGrid
+            ref="gridRef"
             :records="filteredRecords"
             :config="index.config"
             :group-by="groupByField"
-            :sort-by="sortBy"
-            :sort-dir="sortDir"
             @select="selectedRecord = $event"
           />
         </template>
@@ -84,8 +83,8 @@ const textFilter = ref('')
 const filters = ref({})
 const groupByField = ref('')
 const activeView = ref(null)
-const sortBy = ref('')
-const sortDir = ref('asc')
+const sort = ref([])
+const gridRef = ref(null)
 let applyingView = false
 
 const titleField = computed(() => index.value?.config?.title_field || 'title')
@@ -106,7 +105,7 @@ watch(() => index.value?.config?.controlled_fields, cf => {
 }, { immediate: true })
 
 // Deselect active view when user manually changes filters, grouping, or sort
-watch([filters, groupByField, sortBy, sortDir], () => {
+watch([filters, groupByField, sort], () => {
   if (!applyingView) activeView.value = null
 }, { deep: true })
 
@@ -115,10 +114,12 @@ function selectView(view) {
   const cf = index.value?.config?.controlled_fields || {}
   filters.value = { ...emptyFilters(cf), ...(view.filters || {}) }
   groupByField.value = view.group_by || ''
-  sortBy.value = view.sort_by || ''
-  sortDir.value = view.sort_dir || 'asc'
+  sort.value = view.sort || []
   activeView.value = view.name
-  nextTick(() => { applyingView = false })
+  nextTick(() => {
+    gridRef.value?.clearSort()
+    applyingView = false
+  })
 }
 
 const filteredRecords = computed(() => {
@@ -135,6 +136,28 @@ const filteredRecords = computed(() => {
     if (selected.length) {
       records = records.filter(r => selected.includes(r.fields[field]))
     }
+  }
+
+  if (sort.value.length) {
+    const cf = index.value.config.controlled_fields || {}
+    const vocabOrders = {}
+    for (const { field } of sort.value) {
+      if (cf[field]) vocabOrders[field] = Object.fromEntries(cf[field].map((v, i) => [String(v), i]))
+    }
+    records = [...records].sort((a, b) => {
+      for (const { field, dir } of sort.value) {
+        const av = a.fields[field]
+        const bv = b.fields[field]
+        let cmp
+        if (vocabOrders[field]) {
+          cmp = (vocabOrders[field][String(av)] ?? Infinity) - (vocabOrders[field][String(bv)] ?? Infinity)
+        } else {
+          cmp = String(av ?? '').localeCompare(String(bv ?? ''))
+        }
+        if (cmp !== 0) return dir === 'desc' ? -cmp : cmp
+      }
+      return 0
+    })
   }
 
   return records

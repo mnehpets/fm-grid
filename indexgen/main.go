@@ -18,12 +18,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type SortDef struct {
+	Field string `yaml:"field" json:"field"`
+	Dir   string `yaml:"dir"   json:"dir"`
+}
+
 type ViewDef struct {
-	Name    string              `yaml:"name"     json:"name"`
-	Filters map[string][]string `yaml:"filters"  json:"filters,omitempty"`
+	Name    string              `yaml:"name"    json:"name"`
+	Filters map[string][]string `yaml:"filters" json:"filters,omitempty"`
 	GroupBy string              `yaml:"group_by" json:"group_by,omitempty"`
-	SortBy  string              `yaml:"sort_by"  json:"sort_by,omitempty"`
-	SortDir string              `yaml:"sort_dir" json:"sort_dir,omitempty"`
+	Sort    []SortDef           `yaml:"sort"    json:"sort,omitempty"`
 }
 
 type Config struct {
@@ -229,13 +233,30 @@ func parseFrontmatter(data []byte) (map[string]interface{}, string, bool) {
 	if err := yaml.Unmarshal([]byte(rest[:end]), &fields); err != nil {
 		return nil, "", false
 	}
+	normalizeDates(fields)
 	return fields, body, true
+}
+
+// normalizeDates converts time.Time values (yaml.v3 parses unquoted dates) to YYYY-MM-DD strings.
+// A midnight-UTC timestamp can display as the previous day in non-UTC locales.
+func normalizeDates(fields map[string]interface{}) {
+	for k, v := range fields {
+		if t, ok := v.(time.Time); ok {
+			fields[k] = t.Format("2006-01-02")
+		}
+	}
 }
 
 func excerpt(body string, n int) string {
 	var out []string
 	for _, line := range strings.Split(strings.TrimSpace(body), "\n") {
 		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
 		if line != "" {
 			out = append(out, line)
 			if len(out) >= n {

@@ -53,7 +53,10 @@ views:
     filters:
       status: [Todo, Doing]
     group_by: status
-    sort_by: due
-    sort_dir: asc
+    sort:
+      - field: priority
+        dir: asc
+      - field: due
+        dir: asc
   - name: All
 ```

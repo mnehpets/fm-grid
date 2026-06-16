@@ -10,8 +10,6 @@ const props = defineProps({
   records: { type: Array, required: true },
   config: { type: Object, required: true },
   groupBy: { type: String, default: '' },
-  sortBy: { type: String, default: '' },
-  sortDir: { type: String, default: 'asc' },
 })
 const emit = defineEmits(['select'])
 
@@ -22,26 +20,41 @@ function columnLabel(field) {
   return field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+function vocabSorter(vocab) {
+  const order = Object.fromEntries(vocab.map((v, i) => [String(v), i]))
+  return (a, b) => (order[String(a)] ?? vocab.length) - (order[String(b)] ?? vocab.length)
+}
+
 function buildColumns(config) {
-  return (config.columns || []).map(field => ({
-    title: columnLabel(field),
-    field: `fields.${field}`,
-    sorter: 'string',
-    ...(field === config.id_field ? { width: 80, frozen: true } : {}),
-    ...(field === config.title_field ? { widthGrow: 3 } : {}),
-  }))
+  return (config.columns || []).map(field => {
+    const vocab = config.controlled_fields?.[field]
+    return {
+      title: columnLabel(field),
+      field: `fields.${field}`,
+      sorter: vocab?.length ? vocabSorter(vocab) : 'string',
+      ...(field === config.id_field ? { width: 80, frozen: true } : {}),
+      ...(field === config.title_field ? { widthGrow: 3 } : {}),
+    }
+  })
 }
 
 function applyGroupBy(field) {
   if (!tabulator) return
   if (!field) {
     tabulator.setGroupBy(false)
-    return
+    tabulator.setGroupValues([])
+  } else {
+    const vocab = props.config.controlled_fields?.[field]
+    tabulator.setGroupBy(`fields.${field}`)
+    tabulator.setGroupValues(vocab?.length ? [vocab] : [])
   }
-  const vocab = props.config.controlled_fields?.[field]
-  tabulator.setGroupBy(`fields.${field}`)
-  if (vocab?.length) tabulator.setGroupValues([vocab])
 }
+
+function clearSort() {
+  tabulator?.clearSort()
+}
+
+defineExpose({ clearSort })
 
 onMounted(() => {
   tabulator = new Tabulator(tableEl.value, {
@@ -57,19 +70,8 @@ onMounted(() => {
     },
   })
   if (props.groupBy) applyGroupBy(props.groupBy)
-  if (props.sortBy) applySort(props.sortBy, props.sortDir)
 })
-
-function applySort(field, dir) {
-  if (!tabulator) return
-  if (field) {
-    tabulator.setSort([{ column: `fields.${field}`, dir: dir || 'asc' }])
-  } else {
-    tabulator.clearSort()
-  }
-}
 
 watch(() => props.records, records => tabulator?.setData(records))
 watch(() => props.groupBy, applyGroupBy)
-watch([() => props.sortBy, () => props.sortDir], ([field, dir]) => applySort(field, dir))
 </script>
