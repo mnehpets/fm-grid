@@ -1,0 +1,21 @@
+# Go
+*.exe
+*.test
+*.out
+/vendor/
+
+# Node / Vue
+node_modules/
+dist/
+.vite/
+.nuxt/
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
