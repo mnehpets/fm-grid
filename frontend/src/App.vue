@@ -1,0 +1,165 @@
+<template>
+  <div id="app">
+    <header class="app-header">
+      <h1>FM Grid</h1>
+      <div class="controls" v-if="index">
+        <input
+          v-model="textFilter"
+          type="search"
+          :placeholder="`Search ${titleField}…`"
+        />
+        <FilterDropdown
+          v-for="(vocab, field) in index.config.controlled_fields"
+          :key="field"
+          :label="fieldLabel(field)"
+          :options="vocab"
+          v-model="filters[field]"
+        />
+        <select v-model="groupByField" class="group-select">
+          <option value="">No grouping</option>
+          <option v-for="col in index.config.columns" :key="col" :value="col">
+            Group by {{ fieldLabel(col) }}
+          </option>
+        </select>
+      </div>
+    </header>
+
+    <nav class="views-bar" v-if="index?.config?.views?.length">
+      <button
+        v-for="view in index.config.views"
+        :key="view.name"
+        class="view-btn"
+        :class="{ active: activeView === view.name }"
+        @click="selectView(view)"
+      >
+        {{ view.name }}
+      </button>
+    </nav>
+
+    <div class="app-body">
+      <div class="grid-pane">
+        <div v-if="loadError" class="state-msg">{{ loadError }}</div>
+        <div v-else-if="!index" class="state-msg">Loading…</div>
+        <template v-else>
+          <details v-if="index.errors?.length" class="error-banner">
+            <summary>{{ index.errors.length }} parse error(s)</summary>
+            <ul>
+              <li v-for="e in index.errors" :key="e.path">
+                <strong>{{ e.path }}</strong>: {{ e.error }}
+              </li>
+            </ul>
+          </details>
+          <RecordGrid
+            :records="filteredRecords"
+            :config="index.config"
+            :group-by="groupByField"
+            :sort-by="sortBy"
+            :sort-dir="sortDir"
+            @select="selectedRecord = $event"
+          />
+        </template>
+      </div>
+
+      <div class="detail-pane" v-if="selectedRecord">
+        <RecordDetail
+          :record="selectedRecord"
+          :config="index.config"
+          @close="selectedRecord = null"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import RecordGrid from './components/RecordGrid.vue'
+import RecordDetail from './components/RecordDetail.vue'
+import FilterDropdown from './components/FilterDropdown.vue'
+
+const index = ref(null)
+const loadError = ref(null)
+const selectedRecord = ref(null)
+const textFilter = ref('')
+const filters = ref({})
+const groupByField = ref('')
+const activeView = ref(null)
+const sortBy = ref('')
+const sortDir = ref('asc')
+let applyingView = false
+
+const titleField = computed(() => index.value?.config?.title_field || 'title')
+
+function fieldLabel(field) {
+  return field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function emptyFilters(cf) {
+  return Object.fromEntries(Object.keys(cf || {}).map(k => [k, []]))
+}
+
+watch(() => index.value?.config?.controlled_fields, cf => {
+  if (!cf) return
+  const next = emptyFilters(cf)
+  for (const k of Object.keys(next)) next[k] = filters.value[k] ?? []
+  filters.value = next
+}, { immediate: true })
+
+// Deselect active view when user manually changes filters, grouping, or sort
+watch([filters, groupByField, sortBy, sortDir], () => {
+  if (!applyingView) activeView.value = null
+}, { deep: true })
+
+function selectView(view) {
+  applyingView = true
+  const cf = index.value?.config?.controlled_fields || {}
+  filters.value = { ...emptyFilters(cf), ...(view.filters || {}) }
+  groupByField.value = view.group_by || ''
+  sortBy.value = view.sort_by || ''
+  sortDir.value = view.sort_dir || 'asc'
+  activeView.value = view.name
+  nextTick(() => { applyingView = false })
+}
+
+const filteredRecords = computed(() => {
+  if (!index.value) return []
+  let records = index.value.records
+
+  const text = textFilter.value.trim().toLowerCase()
+  if (text) {
+    const tf = titleField.value
+    records = records.filter(r => String(r.fields[tf] || '').toLowerCase().includes(text))
+  }
+
+  for (const [field, selected] of Object.entries(filters.value)) {
+    if (selected.length) {
+      records = records.filter(r => selected.includes(r.fields[field]))
+    }
+  }
+
+  return records
+})
+
+function resolveIndexUrl() {
+  const param = new URLSearchParams(window.location.search).get('src')
+  if (!param) return './index.json'
+  try {
+    const url = new URL(param, window.location.origin)
+    if (url.origin !== window.location.origin) throw new Error('cross-origin src rejected')
+    return url.href
+  } catch (e) {
+    throw new Error(`invalid src param: ${param}`)
+  }
+}
+
+onMounted(async () => {
+  try {
+    const url = resolveIndexUrl()
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`)
+    index.value = await res.json()
+  } catch (e) {
+    loadError.value = e.message
+  }
+})
+</script>
