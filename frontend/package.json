@@ -9,8 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.4.0",
-    "tabulator-tables": "^6.3.0"
+    "js-yaml": "^4.1.0",
+    "markdown-it": "^14.2.0",
+    "tabulator-tables": "^6.3.0",
+    "vue": "^3.4.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",

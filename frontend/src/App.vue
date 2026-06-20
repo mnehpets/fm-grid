@@ -75,6 +75,7 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import RecordGrid from './components/RecordGrid.vue'
 import RecordDetail from './components/RecordDetail.vue'
 import FilterDropdown from './components/FilterDropdown.vue'
+import { loadSchema, webdavSource } from './sources/index.js'
 
 const index = ref(null)
 const loadError = ref(null)
@@ -163,24 +164,30 @@ const filteredRecords = computed(() => {
   return records
 })
 
-function resolveIndexUrl() {
-  const param = new URLSearchParams(window.location.search).get('src')
-  if (!param) return './index.json'
-  try {
-    const url = new URL(param, window.location.origin)
-    if (url.origin !== window.location.origin) throw new Error('cross-origin src rejected')
-    return url.href
-  } catch (e) {
-    throw new Error(`invalid src param: ${param}`)
-  }
+// Resolve param (or fallback) to a same-origin absolute URL.
+function sameOriginUrl(param, fallback) {
+  const url = new URL(param || fallback, window.location.href)
+  if (url.origin !== window.location.origin) throw new Error(`cross-origin URL rejected: ${url.href}`)
+  return url.href
 }
 
+// The schema (?src=, default ./schema.yaml) is the entry point: it supplies the
+// display config and, via source_dir, where the source tree is served. The grid
+// then PROPFINDs that collection (?dav= to override) for a live file list and
+// parses each .md client-side.
 onMounted(async () => {
   try {
-    const url = resolveIndexUrl()
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`)
-    index.value = await res.json()
+    const params = new URLSearchParams(window.location.search)
+
+    const schemaUrl = sameOriginUrl(params.get('src'), './schema.yaml')
+    const schema = await loadSchema(schemaUrl)
+
+    // source_dir resolves against the schema's location, so the served .md tree
+    // (the WebDAV collection) lines up by construction.
+    const srcDir = String(schema.source_dir || '.').replace(/\/?$/, '/')
+    const collectionUrl = sameOriginUrl(params.get('dav'), new URL(srcDir, schemaUrl).href)
+
+    index.value = await webdavSource(collectionUrl, schema).list()
   } catch (e) {
     loadError.value = e.message
   }

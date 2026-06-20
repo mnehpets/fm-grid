@@ -65,10 +65,9 @@ onMounted(() => {
     paginationSize: 50,
     paginationSizeSelector: [25, 50, 100],
     movableColumns: true,
-    rowClick(_e, row) {
-      emit('select', row.getData())
-    },
   })
+  // Tabulator 6 removed option-style callbacks; events bind via .on().
+  tabulator.on('rowClick', (_e, row) => emit('select', row.getData()))
   if (props.groupBy) applyGroupBy(props.groupBy)
 })
 
