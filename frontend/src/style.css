@@ -90,6 +90,19 @@ body {
 .error-banner summary { cursor: pointer; font-weight: 600; }
 .error-banner ul { margin: 6px 0 0; padding-left: 18px; }
 
+.warning-banner {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.warning-banner summary { cursor: pointer; font-weight: 600; }
+.warning-banner ul { margin: 6px 0 0; padding-left: 18px; }
+
 .state-msg {
   padding: 40px;
   text-align: center;

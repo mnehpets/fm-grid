@@ -5,7 +5,7 @@ import { parseFrontmatter, excerpt, sha256Hex, idLess } from './frontmatter.js'
 // the grid, filters, sort, and detail view depend only on that shape.
 
 async function fetchOk(url) {
-  const res = await fetch(url)
+  const res = await fetch(url, { cache: 'no-cache' })
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`)
   return res
 }
@@ -46,6 +46,7 @@ export function webdavSource(collectionUrl, config) {
       const excerptLines = config.excerpt_lines || 3
       const records = []
       const errors = []
+      const warnings = []
 
       await Promise.all(entries.map(async ({ path, url, etag }) => {
         let text
@@ -62,10 +63,8 @@ export function webdavSource(collectionUrl, config) {
           return
         }
 
-        const bad = validateControlled(parsed.fields, controlled)
-        if (bad) {
-          errors.push({ path, error: bad })
-          return
+        for (const w of controlledWarnings(parsed.fields, controlled)) {
+          warnings.push({ path, warning: w })
         }
 
         records.push({
@@ -84,7 +83,7 @@ export function webdavSource(collectionUrl, config) {
       }
       errors.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 
-      return { generated_at: new Date().toISOString(), config, records, errors }
+      return { generated_at: new Date().toISOString(), config, records, errors, warnings }
     },
   }
 }
@@ -118,15 +117,16 @@ function parseMultistatus(xml, collectionUrl) {
   return out
 }
 
-// Drops a record and records an error when a controlled field carries a value
-// outside its vocabulary, so drift is surfaced instead of silently shown.
-function validateControlled(fields, controlled) {
+// Returns a warning string for each controlled field that carries a value outside
+// its vocabulary. Records are kept; callers surface these as warnings, not errors.
+function controlledWarnings(fields, controlled) {
+  const out = []
   for (const [field, vocab] of Object.entries(controlled)) {
     if (!(field in fields)) continue
     const v = fields[field]
     if (typeof v !== 'string' || !vocab.includes(v)) {
-      return `field ${JSON.stringify(field)} value ${JSON.stringify(v)} not in vocabulary`
+      out.push(`field ${JSON.stringify(field)} value ${JSON.stringify(v)} not in vocabulary`)
     }
   }
-  return null
+  return out
 }

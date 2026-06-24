@@ -38,6 +38,7 @@ The frontend enumerates the collection with a `PROPFIND` (Depth: 1), then `GET`s
 ## Schema
 
 ```yaml
+title: My Tasks          # optional — replaces "FM Grid" in the header and page title
 source_dir: ./records
 id_field: id
 title_field: title
@@ -46,6 +47,7 @@ controlled_fields:
   status: [Todo, Doing, Done]
   priority: [High, Medium, Low]
 excerpt_lines: 3
+default_view: Active     # optional — view applied automatically on load
 views:
   - name: Active
     filters:

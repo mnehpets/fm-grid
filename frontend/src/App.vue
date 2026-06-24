@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <header class="app-header">
-      <h1>FM Grid</h1>
+      <h1>{{ index?.config?.title || 'FM Grid' }}</h1>
       <div class="controls" v-if="index">
         <input
           v-model="textFilter"
@@ -46,6 +46,14 @@
             <ul>
               <li v-for="e in index.errors" :key="e.path">
                 <strong>{{ e.path }}</strong>: {{ e.error }}
+              </li>
+            </ul>
+          </details>
+          <details v-if="index.warnings?.length" class="warning-banner">
+            <summary>{{ index.warnings.length }} validation warning(s)</summary>
+            <ul>
+              <li v-for="w in index.warnings" :key="w.path + w.warning">
+                <strong>{{ w.path }}</strong>: {{ w.warning }}
               </li>
             </ul>
           </details>
@@ -188,6 +196,14 @@ onMounted(async () => {
     const collectionUrl = sameOriginUrl(params.get('dav'), new URL(srcDir, schemaUrl).href)
 
     index.value = await webdavSource(collectionUrl, schema).list()
+
+    if (schema.title) document.title = schema.title
+
+    const defaultViewName = schema.default_view
+    if (defaultViewName) {
+      const view = (schema.views || []).find(v => v.name === defaultViewName)
+      if (view) selectView(view)
+    }
   } catch (e) {
     loadError.value = e.message
   }
